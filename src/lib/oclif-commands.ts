@@ -31,6 +31,7 @@ import {
 } from "./maintenance-cli-commands";
 import { PolicyAddCommand, PolicyRemoveCommand } from "./policy-mutate-cli-commands";
 import RebuildCliCommand from "./rebuild-cli-command";
+import SecurityCliCommand from "./security-cli-command";
 import {
   SandboxChannelsListCommand,
   SandboxConfigGetCommand,
@@ -101,6 +102,7 @@ export default {
   "tunnel:start": TunnelStartCommand,
   "tunnel:stop": TunnelStopCommand,
   gc: GarbageCollectImagesCommand,
+  security: SecurityCliCommand,
   uninstall: UninstallCliCommand,
   "upgrade-sandboxes": UpgradeSandboxesCommand,
 };

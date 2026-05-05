@@ -17,10 +17,10 @@ import type { CommandDef } from "./command-registry";
 
 describe("command-registry", () => {
   describe("COMMANDS array", () => {
-    it("should contain exactly 49 commands", () => {
-      // 23 global (18 visible + 5 hidden help/version aliases)
+    it("should contain exactly 59 commands", () => {
+      // 33 global (28 visible + 5 hidden help/version aliases)
       // 26 sandbox (22 visible + 4 hidden shields/config)
-      expect(COMMANDS).toHaveLength(49);
+      expect(COMMANDS).toHaveLength(59);
     });
 
     it("should have no duplicate usage strings", () => {
@@ -39,9 +39,9 @@ describe("command-registry", () => {
   });
 
   describe("globalCommands()", () => {
-    it("should return exactly 23 entries", () => {
-      // 18 visible + 5 hidden (help, --help, -h, --version, -v)
-      expect(globalCommands()).toHaveLength(23);
+    it("should return exactly 33 entries", () => {
+      // 28 visible + 5 hidden (help, --help, -h, --version, -v)
+      expect(globalCommands()).toHaveLength(33);
     });
 
     it("every entry has scope global", () => {
@@ -65,10 +65,10 @@ describe("command-registry", () => {
   });
 
   describe("visibleCommands()", () => {
-    it("should exclude 9 hidden commands (40 visible)", () => {
+    it("should exclude 9 hidden commands (50 visible)", () => {
       // 5 hidden global (help, --help, -h, --version, -v) +
       // 4 hidden sandbox (shields×3, config get)
-      expect(visibleCommands()).toHaveLength(40);
+      expect(visibleCommands()).toHaveLength(50);
     });
 
     it("no visible command has hidden=true", () => {
@@ -142,7 +142,7 @@ describe("command-registry", () => {
   });
 
   describe("globalCommandTokens()", () => {
-    it("returns the exact set of 20 tokens matching the old GLOBAL_COMMANDS", () => {
+    it("returns the exact set of 21 tokens matching global dispatch", () => {
       const tokens = globalCommandTokens();
       const expected = new Set([
         "onboard",
@@ -160,6 +160,7 @@ describe("command-registry", () => {
         "backup-all",
         "upgrade-sandboxes",
         "gc",
+        "security",
         "help",
         "--help",
         "-h",
@@ -238,6 +239,7 @@ describe("command-registry", () => {
         "Messaging Channels",
         "Compatibility Commands",
         "Services",
+        "Security",
         "Troubleshooting",
         "Credentials",
         "Backup",

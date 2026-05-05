@@ -67,6 +67,7 @@ export function resolveGlobalOclifDispatch(cmd: string, args: string[]): Dispatc
     case "backup-all":
     case "upgrade-sandboxes":
     case "gc":
+    case "security":
       return { kind: "oclif", commandId: cmd, args };
     case "tunnel": {
       const sub = args[0];

@@ -249,6 +249,67 @@ This command remains as a compatibility wrapper for the older Brev-specific boot
 $ nemoclaw deploy <instance-name>
 ```
 
+### `nemoclaw security policy-check`
+
+Validate `security/vulnerability-policy.yaml` and enterprise inventory constraints.
+The check fails closed for invalid policy, missing audit/SBOM paths, expired waivers, missing required provider policy, unpinned dependencies, and mutable Docker base image tags.
+
+```console
+$ nemoclaw security policy-check [--policy <path>] [--output <path>]
+```
+
+### `nemoclaw security inventory`
+
+Emit normalized dependency inventory JSON for package manifests, lockfiles, Dockerfiles, GitHub Actions, installer scripts, and agent manifests.
+
+```console
+$ nemoclaw security inventory [--policy <path>] [--output <path>]
+```
+
+### `nemoclaw security sbom`
+
+Emit a deterministic CycloneDX JSON SBOM generated from inventory.
+
+```console
+$ nemoclaw security sbom [--policy <path>] [--output <path>]
+```
+
+### `nemoclaw security scan`, `nemoclaw security vuln-report`
+
+Generate a vulnerability report with OSV correlation, optional CISA KEV and EPSS enrichment, enterprise risk scoring, VEX statements, waiver records, provider failures, and policy violations.
+Use `--online` only when the policy allows internet access.
+The command exits nonzero after writing output when blocking policy, provider, VEX, or risk-threshold violations are present.
+
+```console
+$ nemoclaw security scan [--policy <path>] [--output <path>] [--online]
+$ nemoclaw security vuln-report [--policy <path>] [--output <path>] [--online]
+```
+
+### `nemoclaw security patch-plan`, `nemoclaw security mitigation-plan`
+
+Generate read-only patch or mitigation plans.
+Patch plans propose new dependency, lockfile, image, or artifact inputs.
+Mitigation plans propose policy or capability restrictions when no safe fixed version is known.
+Neither command mutates a running runtime.
+Both commands exit nonzero after writing output when blocking violations are present.
+
+```console
+$ nemoclaw security patch-plan [--policy <path>] [--output <path>] [--online]
+$ nemoclaw security mitigation-plan [--policy <path>] [--output <path>] [--online]
+```
+
+### `nemoclaw security prepare-patch`, `nemoclaw security test-patch`, `nemoclaw security apply-approved`
+
+`prepare-patch` emits candidate plan metadata only.
+`test-patch` validates required test, approval, provenance, and external signing metadata.
+`apply-approved` fails closed in V1; production rollout must happen through the organization’s approved release pipeline.
+
+```console
+$ nemoclaw security prepare-patch [--policy <path>] [--output <path>] [--online]
+$ nemoclaw security test-patch --candidate <path> [--policy <path>] [--output <path>]
+$ nemoclaw security apply-approved --candidate <path> [--policy <path>] [--output <path>]
+```
+
 ### `nemoclaw <name> connect`
 
 Connect to a sandbox by name.

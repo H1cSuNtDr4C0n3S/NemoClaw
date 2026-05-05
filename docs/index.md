@@ -362,6 +362,8 @@ Monitor Sandbox Activity <monitoring/monitor-sandbox-activity>
 Security Best Practices <security/best-practices>
 Credential Storage <security/credential-storage>
 OpenClaw Controls <security/openclaw-controls>
+Enterprise Vulnerability Management <security/vulnerability-management>
+Enterprise Hardening Roadmap <security/enterprise-hardening-roadmap>
 ```
 
 ```{toctree}

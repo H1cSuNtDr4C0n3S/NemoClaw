@@ -30,6 +30,7 @@ export type CommandGroup =
   | "Messaging Channels"
   | "Compatibility Commands"
   | "Services"
+  | "Security"
   | "Troubleshooting"
   | "Credentials"
   | "Backup"
@@ -62,6 +63,7 @@ export const GROUP_ORDER: readonly CommandGroup[] = [
   "Messaging Channels",
   "Compatibility Commands",
   "Services",
+  "Security",
   "Troubleshooting",
   "Credentials",
   "Backup",
@@ -70,7 +72,7 @@ export const GROUP_ORDER: readonly CommandGroup[] = [
 ] as const;
 
 /**
- * All 46 CLI commands. This is the single source of truth.
+ * All CLI commands. This is the single source of truth.
  *
  * The order within each group matches the current help() display order.
  */
@@ -337,6 +339,78 @@ export const COMMANDS: readonly CommandDef[] = [
     description: "Show sandbox list and service status",
     flags: "[--json]",
     group: "Services",
+    scope: "global",
+  },
+
+  // ── Security ─────────────────────────────────────────────────────────────
+  {
+    usage: "nemoclaw security policy-check",
+    description: "Validate vulnerability policy and enterprise inventory constraints",
+    flags: "[--policy <path>] [--output <path>]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security inventory",
+    description: "Emit normalized dependency inventory JSON",
+    flags: "[--policy <path>] [--output <path>]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security sbom",
+    description: "Emit deterministic CycloneDX JSON SBOM",
+    flags: "[--policy <path>] [--output <path>]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security scan",
+    description: "Generate vulnerability report with risk, VEX, waivers, and provider failures",
+    flags: "[--policy <path>] [--output <path>] [--online]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security vuln-report",
+    description: "Alias for security scan",
+    flags: "[--policy <path>] [--output <path>] [--online]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security patch-plan",
+    description: "Propose patch candidate actions without mutating production or runtime state",
+    flags: "[--policy <path>] [--output <path>] [--online]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security mitigation-plan",
+    description: "Propose mitigation-only actions when no safe fixed version is known",
+    flags: "[--policy <path>] [--output <path>] [--online]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security prepare-patch",
+    description: "Emit candidate patch metadata; does not apply or install updates",
+    flags: "[--policy <path>] [--output <path>] [--online]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security test-patch",
+    description: "Validate candidate test, approval, provenance, and signing metadata",
+    flags: "[--policy <path>] --candidate <path> [--output <path>]",
+    group: "Security",
+    scope: "global",
+  },
+  {
+    usage: "nemoclaw security apply-approved",
+    description: "Fail closed unless external approval, provenance, and signing are present",
+    flags: "[--policy <path>] --candidate <path> [--output <path>]",
+    group: "Security",
     scope: "global",
   },
 
