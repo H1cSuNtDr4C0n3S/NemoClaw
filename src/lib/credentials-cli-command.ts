@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-/* v8 ignore start -- thin oclif adapter covered through CLI integration tests. */
-
 import { Args, Command, Flags } from "@oclif/core";
 
 import { CLI_DISPLAY_NAME, CLI_NAME } from "./branding";
@@ -56,6 +54,10 @@ export class CredentialsCommand extends Command {
   static description =
     "List or reset provider credentials registered with the OpenShell gateway.";
   static usage = ["credentials <list|reset>"];
+  static examples = [
+    "<%= config.bin %> credentials list",
+    "<%= config.bin %> credentials reset nvidia-prod --yes",
+  ];
   static flags = {
     help: Flags.help({ char: "h" }),
   };
@@ -72,6 +74,7 @@ export class CredentialsListCommand extends Command {
   static summary = "List stored credential providers";
   static description = "List provider credentials registered with the OpenShell gateway.";
   static usage = ["credentials list"];
+  static examples = ["<%= config.bin %> credentials list"];
   static flags = {
     help: Flags.help({ char: "h" }),
   };
@@ -120,6 +123,10 @@ export class CredentialsResetCommand extends Command {
   static summary = "Remove a provider credential";
   static description = "Remove a provider credential so onboard re-prompts for it.";
   static usage = ["credentials reset <PROVIDER> [--yes]"];
+  static examples = [
+    "<%= config.bin %> credentials reset nvidia-prod",
+    "<%= config.bin %> credentials reset nvidia-prod --yes",
+  ];
   static args = {
     provider: Args.string({
       name: "PROVIDER",

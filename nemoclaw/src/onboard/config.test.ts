@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   describeOnboardEndpoint,
   describeOnboardProvider,
@@ -145,13 +146,13 @@ describe("onboard/config", () => {
 
     it("returns parsed config when file exists", () => {
       const config = makeConfig();
-      const configPath = `${homedir()}/.nemoclaw/config.json`;
+      const configPath = join(homedir(), ".nemoclaw", "config.json");
       store.set(configPath, JSON.stringify(config));
       expect(loadOnboardConfig()).toEqual(config);
     });
 
     it("returns null when the parsed JSON root is not a valid onboard config", () => {
-      const configPath = `${homedir()}/.nemoclaw/config.json`;
+      const configPath = join(homedir(), ".nemoclaw", "config.json");
       store.set(configPath, JSON.stringify({ endpointType: "bogus" }));
       expect(loadOnboardConfig()).toBeNull();
     });

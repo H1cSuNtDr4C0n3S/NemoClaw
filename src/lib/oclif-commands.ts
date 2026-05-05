@@ -32,6 +32,9 @@ import {
 import { PolicyAddCommand, PolicyRemoveCommand } from "./policy-mutate-cli-commands";
 import RebuildCliCommand from "./rebuild-cli-command";
 import SecurityCliCommand from "./security-cli-command";
+import RecoverCliCommand from "./recover-cli-command";
+import SandboxConfigSetCommand from "./sandbox-config-set-cli-command";
+import SandboxDoctorCliCommand from "./sandbox-doctor-cli-command";
 import {
   SandboxChannelsListCommand,
   SandboxConfigGetCommand,
@@ -44,9 +47,14 @@ import {
   ShieldsStatusCommand,
   ShieldsUpCommand,
 } from "./shields-cli-commands";
-import ShareCommand from "./share-command";
-import SkillInstallCliCommand from "./skill-install-cli-command";
+import ShareCommand, {
+  ShareMountCommand,
+  ShareStatusCommand,
+  ShareUnmountCommand,
+} from "./share-cli-commands";
+import SkillInstallCliCommand, { SkillCliCommand } from "./skill-install-cli-command";
 import {
+  SnapshotCommand,
   SnapshotCreateCommand,
   SnapshotListCommand,
   SnapshotRestoreCommand,
@@ -77,28 +85,36 @@ export default {
   "sandbox:channels:start": ChannelsStartCommand,
   "sandbox:channels:stop": ChannelsStopCommand,
   "sandbox:config:get": SandboxConfigGetCommand,
+  "sandbox:config:set": SandboxConfigSetCommand,
   "sandbox:connect": ConnectCliCommand,
   "sandbox:destroy": DestroyCliCommand,
+  "sandbox:doctor": SandboxDoctorCliCommand,
   "sandbox:logs": SandboxLogsCommand,
-  "sandbox:policy-add": PolicyAddCommand,
-  "sandbox:policy-list": SandboxPolicyListCommand,
-  "sandbox:policy-remove": PolicyRemoveCommand,
+  "sandbox:policy:add": PolicyAddCommand,
+  "sandbox:policy:list": SandboxPolicyListCommand,
+  "sandbox:policy:remove": PolicyRemoveCommand,
   "sandbox:rebuild": RebuildCliCommand,
+  "sandbox:recover": RecoverCliCommand,
+  "sandbox:share": ShareCommand,
+  "sandbox:share:mount": ShareMountCommand,
+  "sandbox:share:status": ShareStatusCommand,
+  "sandbox:share:unmount": ShareUnmountCommand,
   "sandbox:shields:down": ShieldsDownCommand,
   "sandbox:shields:status": ShieldsStatusCommand,
   "sandbox:shields:up": ShieldsUpCommand,
+  "sandbox:skill": SkillCliCommand,
   "sandbox:skill:install": SkillInstallCliCommand,
+  "sandbox:snapshot": SnapshotCommand,
   "sandbox:snapshot:create": SnapshotCreateCommand,
   "sandbox:snapshot:list": SnapshotListCommand,
   "sandbox:snapshot:restore": SnapshotRestoreCommand,
   "sandbox:status": SandboxStatusCommand,
   setup: SetupCliCommand,
   "setup-spark": SetupSparkCliCommand,
-  share: ShareCommand,
   status: StatusCommand,
   start: DeprecatedStartCommand,
   stop: DeprecatedStopCommand,
-  "sandbox:gateway-token": GatewayTokenCliCommand,
+  "sandbox:gateway:token": GatewayTokenCliCommand,
   "tunnel:start": TunnelStartCommand,
   "tunnel:stop": TunnelStopCommand,
   gc: GarbageCollectImagesCommand,

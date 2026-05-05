@@ -4,7 +4,12 @@
 /* v8 ignore start -- exercised through CLI subprocess maintenance tests. */
 
 import { prompt as askPrompt } from "./credentials";
+import {
+  type GarbageCollectImagesOptions,
+  normalizeGarbageCollectImagesOptions,
+} from "./lifecycle-options";
 import { dockerListImagesFormat, dockerRmi } from "./docker";
+import { findOrphanedSandboxImages, parseSandboxImageRows } from "./maintenance-image-helpers";
 import { captureOpenshell } from "./openshell-runtime";
 import * as registry from "./registry";
 import { parseLiveSandboxNames } from "./runtime-recovery";
@@ -42,11 +47,12 @@ export function backupAll(): void {
     const result = sandboxState.backupSandboxState(sb.name);
     if (result.success) {
       console.log(
-        `  ${G}✓${R} ${sb.name}: ${result.backedUpDirs.length} dirs → ${result.manifest?.backupPath || "unknown"}`,
+        `  ${G}✓${R} ${sb.name}: ${result.backedUpDirs.length} dirs, ${result.backedUpFiles.length} files → ${result.manifest?.backupPath || "unknown"}`,
       );
       backed++;
     } else {
-      console.error(`  ${RD}✗${R} ${sb.name}: backup failed (${result.failedDirs.join(", ")})`);
+      const failedItems = [...result.failedDirs, ...result.failedFiles];
+      console.error(`  ${RD}✗${R} ${sb.name}: backup failed (${failedItems.join(", ")})`);
       failed++;
     }
   }
@@ -60,9 +66,12 @@ export function backupAll(): void {
   }
 }
 
-export async function garbageCollectImages(args: string[] = []): Promise<void> {
-  const dryRun = args.includes("--dry-run");
-  const skipConfirm = args.includes("--yes") || args.includes("--force");
+export async function garbageCollectImages(
+  options: string[] | GarbageCollectImagesOptions = {},
+): Promise<void> {
+  const normalized = normalizeGarbageCollectImagesOptions(options);
+  const dryRun = normalized.dryRun === true;
+  const skipConfirm = normalized.yes === true || normalized.force === true;
 
   let imagesOutput = "";
   try {
@@ -75,29 +84,15 @@ export async function garbageCollectImages(args: string[] = []): Promise<void> {
     process.exit(1);
   }
 
-  const allImages = imagesOutput
-    .split("\n")
-    .map((line: string) => line.trim())
-    .filter(Boolean)
-    .map((line: string) => {
-      const [tag, size] = line.split("\t");
-      return { tag, size: size || "unknown" };
-    });
+  const allImages = parseSandboxImageRows(imagesOutput);
 
   if (allImages.length === 0) {
     console.log("  No sandbox images found on the host.");
     return;
   }
 
-  const registeredTags = new Set();
   const { sandboxes } = registry.listSandboxes();
-  for (const sb of sandboxes) {
-    if (sb.imageTag) registeredTags.add(sb.imageTag);
-  }
-
-  const orphans = allImages.filter(
-    (img: { tag: string; size: string }) => !registeredTags.has(img.tag),
-  );
+  const orphans = findOrphanedSandboxImages(allImages, sandboxes);
 
   if (orphans.length === 0) {
     console.log(`  All ${allImages.length} sandbox image(s) are in use. Nothing to clean up.`);

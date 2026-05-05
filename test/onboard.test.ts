@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentDefinition } from "../dist/lib/agent-defs.js";
 import { loadAgent } from "../dist/lib/agent-defs.js";
 import { buildChain, buildControlUiUrls } from "../dist/lib/dashboard-contract.js";
+import { NAME_ALLOWED_FORMAT } from "../dist/lib/name-validation.js";
 import { stageOptimizedSandboxBuildContext } from "../dist/lib/sandbox-build-context.js";
 
 type ShimScalar = string | number | boolean | null | undefined;
@@ -23,6 +24,8 @@ type CommandEntry = {
   env?: Record<string, string | undefined>;
   policyContent?: string;
   policyReadError?: string;
+  dockerfileContent?: string;
+  dockerfileReadError?: string;
 };
 type DashboardAccess = { label: string; url: string };
 type ResumeConflict = { field: string; requested: string | null; recorded: string | null };
@@ -55,6 +58,11 @@ type OnboardTestInternals = {
     portToStop: string,
   ) => string | null;
   formatOnboardConfigSummary: ShimFn<string>;
+  formatSandboxBuildEstimateNote: (host: {
+    isContainerRuntimeUnderProvisioned: boolean;
+    dockerCpus?: number;
+    dockerMemTotalBytes?: number;
+  }) => string | null;
   getDashboardAccessInfo: ShimFn<DashboardAccess[]>;
   getDashboardForwardStartCommand: ShimFn<string>;
   getNavigationChoice: (value?: string | null) => string | null;
@@ -139,6 +147,7 @@ function isOnboardTestInternals(
     typeof value.normalizeSandboxAgentName === "function" &&
     typeof value.agentSupportsWebSearch === "function" &&
     typeof value.configureWebSearch === "function" &&
+    typeof value.formatSandboxBuildEstimateNote === "function" &&
     typeof value.shouldRunCompatibleEndpointSandboxSmoke === "function" &&
     typeof value.writeSandboxConfigSyncFile === "function"
   );
@@ -202,6 +211,7 @@ const {
   writeSandboxConfigSyncFile,
   findDashboardForwardOwner,
   formatOnboardConfigSummary,
+  formatSandboxBuildEstimateNote,
 } = onboardTestInternals;
 
 describe("onboard helpers", () => {
@@ -805,6 +815,24 @@ describe("onboard helpers", () => {
         message: "HTTP 405: unsupported model",
       }),
     ).toEqual({ kind: "model", retry: "model" });
+  });
+
+  it("classifies TLS certificate errors as transport", () => {
+    expect(
+      classifyValidationFailure({
+        message: "transport error: invalid peer certificate: UnknownIssuer",
+      }),
+    ).toEqual({ kind: "transport", retry: "retry" });
+    expect(
+      classifyValidationFailure({
+        message: "SSL certificate problem: unable to get local issuer certificate",
+      }),
+    ).toEqual({ kind: "transport", retry: "retry" });
+    expect(
+      classifyValidationFailure({
+        message: "TLS handshake failure",
+      }),
+    ).toEqual({ kind: "transport", retry: "retry" });
   });
 
   it("detects tool-calling responses payloads conservatively", () => {
@@ -3005,7 +3033,7 @@ const { setupInference } = require(${onboardPath});
       source,
       // #2753: sandboxName is intentionally absent from the options here so
       // the session does not record a name before createSandbox completes.
-      /startRecordedStep\("sandbox", \{ provider, model \}\);\s*selectedMessagingChannels = await setupMessagingChannels\(\);\s*onboardSession\.updateSession\(\(current[^)]*\) => \{\s*current\.messagingChannels = selectedMessagingChannels;\s*return current;\s*\}\);[\s\S]*?sandboxName = await createSandbox\(\s*gpu,\s*model,\s*provider,\s*preferredInferenceApi,\s*sandboxName,\s*nextWebSearchConfig,\s*selectedMessagingChannels,\s*fromDockerfile,\s*agent,\s*opts\.controlUiPort \|\| null,\s*\);/,
+      /startRecordedStep\("sandbox", \{ provider, model \}\);\s*const recordedMessagingChannels = getRecordedMessagingChannelsForResume\(resume, session\);[\s\S]*?selectedMessagingChannels = recordedMessagingChannels;[\s\S]*?selectedMessagingChannels = await setupMessagingChannels\(\);[\s\S]*?onboardSession\.updateSession\(\(current[^)]*\) => \{\s*current\.messagingChannels = selectedMessagingChannels;\s*return current;\s*\}\);[\s\S]*?sandboxName = await createSandbox\(\s*gpu,\s*model,\s*provider,\s*preferredInferenceApi,\s*sandboxName,\s*nextWebSearchConfig,\s*selectedMessagingChannels,\s*fromDockerfile,\s*agent,\s*opts\.controlUiPort \|\| null,\s*\);/,
     );
   });
 
@@ -3856,6 +3884,174 @@ const { createSandbox } = require(${onboardPath});
         !envString.includes("123456:ABC-test-telegram-token"),
         "Telegram token value must not leak into sandbox env",
       );
+    },
+  );
+
+  it(
+    "reuses existing messaging providers during non-interactive recreate when tokens are not in the host env",
+    { timeout: 60_000 },
+    async () => {
+      const repoRoot = path.join(import.meta.dirname, "..");
+      const tmpDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "nemoclaw-onboard-messaging-reuse-provider-"),
+      );
+      const fakeBin = path.join(tmpDir, "bin");
+      const scriptPath = path.join(tmpDir, "messaging-reuse-provider.js");
+      const onboardPath = JSON.stringify(path.join(repoRoot, "dist", "lib", "onboard.js"));
+      const runnerPath = JSON.stringify(path.join(repoRoot, "dist", "lib", "runner.js"));
+      const registryPath = JSON.stringify(path.join(repoRoot, "dist", "lib", "registry.js"));
+      const preflightPath = JSON.stringify(path.join(repoRoot, "dist", "lib", "preflight.js"));
+      const credentialsPath = JSON.stringify(path.join(repoRoot, "dist", "lib", "credentials.js"));
+
+      fs.mkdirSync(fakeBin, { recursive: true });
+      fs.writeFileSync(path.join(fakeBin, "openshell"), "#!/usr/bin/env bash\nexit 0\n", {
+        mode: 0o755,
+      });
+
+      const script = String.raw`
+const runner = require(${runnerPath});
+const _n = (c) => (Array.isArray(c) ? c.join(" ") : String(c)).replace(/'/g, "");
+const registry = require(${registryPath});
+const preflight = require(${preflightPath});
+const credentials = require(${credentialsPath});
+const childProcess = require("node:child_process");
+const { EventEmitter } = require("node:events");
+const fs = require("node:fs");
+
+const commands = [];
+const registerCalls = [];
+registry.registerSandbox({
+  name: "my-assistant",
+  messagingChannels: ["discord", "slack"],
+  providerCredentialHashes: {
+    DISCORD_BOT_TOKEN: "hash-discord",
+    SLACK_BOT_TOKEN: "hash-slack-bot",
+    SLACK_APP_TOKEN: "hash-slack-app",
+    TELEGRAM_BOT_TOKEN: "hash-telegram",
+  },
+});
+runner.run = (command, opts = {}) => {
+  const normalized = _n(command);
+  commands.push({ command: normalized, env: opts.env || null });
+  if (normalized.includes("provider get my-assistant-discord-bridge")) return { status: 0 };
+  if (normalized.includes("provider get my-assistant-slack-bridge")) return { status: 0 };
+  if (normalized.includes("provider get my-assistant-slack-app")) return { status: 0 };
+  if (normalized.includes("provider get")) return { status: 1 };
+  return { status: 0 };
+};
+runner.runCapture = (command) => {
+  if (_n(command).includes("sandbox get my-assistant")) return "";
+  if (_n(command).includes("sandbox list")) return "my-assistant Ready";
+  if (_n(command).includes("sandbox exec -n my-assistant -- curl -sf http://localhost:18789/")) return "ok";
+  if (_n(command).includes("forward list")) return "my-assistant 127.0.0.1 18789 12345 running";
+  return "";
+};
+registry.registerSandbox = (entry) => {
+  registerCalls.push(entry);
+  return true;
+};
+registry.updateSandbox = () => true;
+registry.setDefault = () => true;
+registry.removeSandbox = () => true;
+preflight.checkPortAvailable = async () => ({ ok: true });
+credentials.prompt = async () => "";
+
+childProcess.spawn = (...args) => {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const command = _n(args[1][1]);
+  const entry = { command, env: args[2]?.env || null };
+  const dockerfileMatch = command.match(/--from ([^ ]+Dockerfile)/);
+  if (dockerfileMatch) {
+    try {
+      entry.dockerfileContent = fs.readFileSync(dockerfileMatch[1], "utf-8");
+    } catch (error) {
+      entry.dockerfileReadError = String(error);
+    }
+  }
+  commands.push(entry);
+  process.nextTick(() => {
+    child.stdout.emit("data", Buffer.from("Created sandbox: my-assistant\n"));
+    child.emit("close", 0);
+  });
+  return child;
+};
+
+const { createSandbox } = require(${onboardPath});
+
+(async () => {
+  process.env.OPENSHELL_GATEWAY = "nemoclaw";
+  delete process.env.DISCORD_BOT_TOKEN;
+  delete process.env.SLACK_BOT_TOKEN;
+  delete process.env.SLACK_APP_TOKEN;
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  const sandboxName = await createSandbox(
+    null, "gpt-5.4", "nvidia-prod", null, "my-assistant", null, ["discord", "slack"],
+  );
+  console.log(JSON.stringify({ sandboxName, commands, registerCalls }));
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`;
+      fs.writeFileSync(scriptPath, script);
+
+      const result = spawnSync(process.execPath, [scriptPath], {
+        cwd: repoRoot,
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          HOME: tmpDir,
+          PATH: `${fakeBin}:${process.env.PATH || ""}`,
+          NEMOCLAW_NON_INTERACTIVE: "1",
+          DISCORD_BOT_TOKEN: "",
+          SLACK_BOT_TOKEN: "",
+          SLACK_APP_TOKEN: "",
+          TELEGRAM_BOT_TOKEN: "",
+        },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      const payloadLine = result.stdout
+        .trim()
+        .split("\n")
+        .slice()
+        .reverse()
+        .find((line) => line.startsWith("{") && line.endsWith("}"));
+      assert.ok(payloadLine, `expected JSON payload in stdout:\n${result.stdout}`);
+      const payload = JSON.parse(payloadLine);
+
+      const providerMutationCommands = payload.commands.filter((entry: CommandEntry) =>
+        /\bprovider (create|update)\b/.test(entry.command),
+      );
+      assert.equal(
+        providerMutationCommands.length,
+        0,
+        "tokenless rebuild should not mutate providers",
+      );
+
+      const createCommand = payload.commands.find((entry: CommandEntry) =>
+        entry.command.includes("sandbox create"),
+      );
+      assert.ok(createCommand, "expected sandbox create command");
+      assert.equal(createCommand.dockerfileReadError, undefined);
+      assert.match(createCommand.command, /--provider my-assistant-discord-bridge/);
+      assert.match(createCommand.command, /--provider my-assistant-slack-bridge/);
+      assert.match(createCommand.command, /--provider my-assistant-slack-app/);
+
+      const channelsLine = createCommand.dockerfileContent
+        ?.split("\n")
+        .find((line: string) => line.startsWith("ARG NEMOCLAW_MESSAGING_CHANNELS_B64="));
+      assert.ok(channelsLine, "expected messaging build arg in Dockerfile");
+      const channels = JSON.parse(Buffer.from(channelsLine.split("=")[1], "base64").toString());
+      assert.deepEqual(channels, ["discord", "slack"]);
+      assert.deepEqual(payload.registerCalls[0]?.messagingChannels, ["discord", "slack"]);
+      assert.deepEqual(payload.registerCalls[0]?.providerCredentialHashes, {
+        DISCORD_BOT_TOKEN: "hash-discord",
+        SLACK_BOT_TOKEN: "hash-slack-bot",
+        SLACK_APP_TOKEN: "hash-slack-app",
+      });
     },
   );
 
@@ -6676,6 +6872,18 @@ const { createSandbox } = require(${onboardPath});
     // Non-interactive still exits within this function
     assert.match(fnBody, /isNonInteractive\(\)/);
     assert.match(fnBody, /process\.exit\(1\)/);
+    assert.match(fnBody, /getNameValidationGuidance\("sandbox name", sandboxName,/);
+  });
+
+  it("shows the full allowed sandbox name format before prompting", () => {
+    const source = fs.readFileSync(
+      path.join(import.meta.dirname, "..", "src", "lib", "onboard.ts"),
+      "utf-8",
+    );
+    expect(NAME_ALLOWED_FORMAT).toBe(
+      "lowercase, starts with a letter, letters/numbers/internal hyphens only, ends with letter/number",
+    );
+    assert.match(source, /Sandbox name \(\$\{NAME_ALLOWED_FORMAT\}\)/);
   });
 
   it("guards against reusing the same sandbox name for a different agent", () => {
@@ -7034,7 +7242,7 @@ const { createSandbox } = require(${onboardPath});
       webSearchConfig: { fetchEnabled: true },
       enabledChannels: ["telegram", "slack"],
       sandboxName: "my-assistant",
-      notes: ["Sandbox build takes ~6 minutes on this host."],
+      notes: ["Sandbox build typically takes 5–15 minutes on this host."],
     });
 
     assert.ok(summary.includes("Review configuration"), "summary has review heading");
@@ -7048,7 +7256,7 @@ const { createSandbox } = require(${onboardPath});
     assert.ok(summary.includes("telegram, slack"), "summary lists enabled channels");
     assert.ok(summary.includes("my-assistant"), "summary shows sandbox name");
     assert.ok(
-      summary.includes("Note:          Sandbox build takes ~6 minutes on this host."),
+      summary.includes("Note:          Sandbox build typically takes 5–15 minutes on this host."),
       "summary renders notes under sandbox name",
     );
 
@@ -7091,5 +7299,32 @@ const { createSandbox } = require(${onboardPath});
     });
     assert.ok(!orphanSummary.includes("undefined"), "null fields never render as 'undefined'");
     assert.ok(orphanSummary.includes("(unset)"), "null fields fall back to '(unset)'");
+  });
+
+  it("formatSandboxBuildEstimateNote warns when runtime is under-provisioned (#2514)", () => {
+    const note = formatSandboxBuildEstimateNote({
+      isContainerRuntimeUnderProvisioned: true,
+      dockerCpus: 2,
+      dockerMemTotalBytes: 2 * 1024 ** 3,
+    });
+    assert.ok(note != null && note.length > 0, "returns a note");
+    assert.match(note as string, /under-provisioned/i, "note flags under-provisioned host");
+  });
+
+  it("formatSandboxBuildEstimateNote returns a tighter range on a generous host (#2514)", () => {
+    const note = formatSandboxBuildEstimateNote({
+      isContainerRuntimeUnderProvisioned: false,
+      dockerCpus: 12,
+      dockerMemTotalBytes: 32 * 1024 ** 3,
+    });
+    assert.ok(note != null, "returns a note");
+    assert.match(note ?? "", /\b3[–-]\d+\s+minutes\b/, "tight range starts at 3 minutes");
+  });
+
+  it("formatSandboxBuildEstimateNote returns null when no runtime resource signal is available (#2514)", () => {
+    const note = formatSandboxBuildEstimateNote({
+      isContainerRuntimeUnderProvisioned: false,
+    });
+    assert.strictEqual(note, null);
   });
 });

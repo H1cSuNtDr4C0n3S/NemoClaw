@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-/* v8 ignore start -- transitional action facade until implementations leave src/nemoclaw.ts. */
-
 import { runDeployAction as executeDeployAction } from "./deploy-action";
+import {
+  type GarbageCollectImagesOptions,
+  type UpgradeSandboxesOptions,
+} from "./lifecycle-options";
 import {
   backupAll as executeBackupAllAction,
   garbageCollectImages as executeGarbageCollectImagesAction,
@@ -14,9 +16,24 @@ import {
   runSetupSparkAction as executeSetupSparkAction,
 } from "./onboard-action";
 import { recoverNamedGatewayRuntime as recoverNamedGatewayRuntimeAction } from "./gateway-runtime-action";
-import { getNemoClawRuntimeBridge } from "./nemoclaw-runtime-bridge";
 import { runOpenshell } from "./openshell-runtime";
 import { help, version } from "./root-help-action";
+
+type GatewayRecovery = { recovered: boolean };
+
+type GlobalCliActionRuntimeHooks = {
+  recoverNamedGatewayRuntime?: () => Promise<GatewayRecovery>;
+  runOpenshell?: typeof runOpenshell;
+  upgradeSandboxes?: (options?: string[] | UpgradeSandboxesOptions) => Promise<void>;
+};
+
+let runtimeHooks: GlobalCliActionRuntimeHooks = {};
+
+export function setGlobalCliActionRuntimeHooksForTest(
+  hooks: GlobalCliActionRuntimeHooks,
+): void {
+  runtimeHooks = hooks;
+}
 
 export async function runOnboardAction(args: string[] = []): Promise<void> {
   await executeOnboardAction(args);
@@ -38,12 +55,23 @@ export function runBackupAllAction(): void {
   executeBackupAllAction();
 }
 
-export async function runUpgradeSandboxesAction(args: string[] = []): Promise<void> {
-  await getNemoClawRuntimeBridge().upgradeSandboxes(args);
+export async function runUpgradeSandboxesAction(
+  options: string[] | UpgradeSandboxesOptions = {},
+): Promise<void> {
+  if (typeof runtimeHooks.upgradeSandboxes === "function") {
+    await runtimeHooks.upgradeSandboxes(options);
+    return;
+  }
+  const { upgradeSandboxes } = require("./upgrade-sandboxes-action") as {
+    upgradeSandboxes: (options?: string[] | UpgradeSandboxesOptions) => Promise<void>;
+  };
+  await upgradeSandboxes(options);
 }
 
-export async function runGarbageCollectImagesAction(args: string[] = []): Promise<void> {
-  await executeGarbageCollectImagesAction(args);
+export async function runGarbageCollectImagesAction(
+  options: string[] | GarbageCollectImagesOptions = {},
+): Promise<void> {
+  await executeGarbageCollectImagesAction(options);
 }
 
 export function showRootHelp(): void {
@@ -54,12 +82,9 @@ export function showVersion(): void {
   version();
 }
 
-export async function recoverNamedGatewayRuntime(): Promise<{ recovered: boolean }> {
-  const runtime = getNemoClawRuntimeBridge() as {
-    recoverNamedGatewayRuntime?: () => Promise<{ recovered: boolean }>;
-  };
-  if (typeof runtime.recoverNamedGatewayRuntime === "function") {
-    return runtime.recoverNamedGatewayRuntime();
+export async function recoverNamedGatewayRuntime(): Promise<GatewayRecovery> {
+  if (typeof runtimeHooks.recoverNamedGatewayRuntime === "function") {
+    return runtimeHooks.recoverNamedGatewayRuntime();
   }
   return recoverNamedGatewayRuntimeAction();
 }
@@ -73,11 +98,8 @@ export function runOpenshellProviderCommand(
     timeout?: number;
   },
 ) {
-  const runtime = getNemoClawRuntimeBridge() as {
-    runOpenshell?: typeof runOpenshell;
-  };
-  if (typeof runtime.runOpenshell === "function") {
-    return runtime.runOpenshell(args, opts);
+  if (typeof runtimeHooks.runOpenshell === "function") {
+    return runtimeHooks.runOpenshell(args, opts);
   }
   return runOpenshell(args, opts);
 }

@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-/* v8 ignore start -- thin oclif adapter covered through CLI integration tests. */
-
 import { Args, Command, Flags } from "@oclif/core";
 
 import { CLI_NAME } from "./branding";
@@ -14,6 +12,10 @@ export default class ConnectCliCommand extends Command {
   static summary = "Shell into a running sandbox";
   static description = "Connect to a running sandbox.";
   static usage = ["<name> connect [--probe-only]"];
+  static examples = [
+    "<%= config.bin %> alpha connect",
+    "<%= config.bin %> alpha connect --probe-only",
+  ];
   static args = {
     sandboxName: Args.string({ name: "sandbox", description: "Sandbox name", required: true }),
   };

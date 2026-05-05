@@ -3,19 +3,25 @@
 
 /* v8 ignore start -- transitional action facade until implementations leave src/nemoclaw.ts. */
 
-import type { SandboxConnectOptions } from "./nemoclaw-runtime-bridge";
+import type { DestroySandboxOptions, RebuildSandboxOptions } from "./lifecycle-options";
+import type { SandboxConnectOptions } from "./sandbox-connect-action";
 import type { SandboxLogsOptions } from "./sandbox-logs-options";
-import { getNemoClawRuntimeBridge } from "./nemoclaw-runtime-bridge";
 
 export async function connectSandbox(
   sandboxName: string,
   options?: SandboxConnectOptions,
 ): Promise<void> {
-  await getNemoClawRuntimeBridge().sandboxConnect(sandboxName, options);
+  const { connectSandbox: connectExtractedSandbox } = require("./sandbox-connect-action") as {
+    connectSandbox: (sandboxName: string, options?: SandboxConnectOptions) => Promise<void>;
+  };
+  await connectExtractedSandbox(sandboxName, options);
 }
 
 export async function showSandboxStatus(sandboxName: string): Promise<void> {
-  await getNemoClawRuntimeBridge().sandboxStatus(sandboxName);
+  const { showSandboxStatus: showExtractedSandboxStatus } = require("./sandbox-status-action") as {
+    showSandboxStatus: (sandboxName: string) => Promise<void>;
+  };
+  await showExtractedSandboxStatus(sandboxName);
 }
 
 export function showSandboxLogs(sandboxName: string, options: SandboxLogsOptions): void {
@@ -25,19 +31,40 @@ export function showSandboxLogs(sandboxName: string, options: SandboxLogsOptions
   showSandboxLogsAction(sandboxName, options);
 }
 
-export async function destroySandbox(sandboxName: string, args: string[] = []): Promise<void> {
-  await getNemoClawRuntimeBridge().sandboxDestroy(sandboxName, args);
+export async function destroySandbox(
+  sandboxName: string,
+  options: string[] | DestroySandboxOptions = {},
+): Promise<void> {
+  const { destroySandbox: destroyExtractedSandbox } = require("./sandbox-destroy-action") as {
+    destroySandbox: (
+      sandboxName: string,
+      options?: string[] | DestroySandboxOptions,
+    ) => Promise<void>;
+  };
+  await destroyExtractedSandbox(sandboxName, options);
 }
 
-export async function rebuildSandbox(sandboxName: string, args: string[] = []): Promise<void> {
-  await getNemoClawRuntimeBridge().sandboxRebuild(sandboxName, args);
+export async function rebuildSandbox(
+  sandboxName: string,
+  options: string[] | RebuildSandboxOptions = {},
+): Promise<void> {
+  const { rebuildSandbox: rebuildExtractedSandbox } = require("./sandbox-rebuild-action") as {
+    rebuildSandbox: (
+      sandboxName: string,
+      options?: string[] | RebuildSandboxOptions,
+    ) => Promise<void>;
+  };
+  await rebuildExtractedSandbox(sandboxName, options);
 }
 
 export async function installSandboxSkill(
   sandboxName: string,
   args: string[] = [],
 ): Promise<void> {
-  await getNemoClawRuntimeBridge().sandboxSkillInstall(sandboxName, args);
+  const { installSandboxSkill: installExtractedSandboxSkill } = require("./sandbox-skill-install-action") as {
+    installSandboxSkill: (sandboxName: string, args?: string[]) => Promise<void>;
+  };
+  await installExtractedSandboxSkill(sandboxName, args);
 }
 
 export async function runSandboxSnapshot(sandboxName: string, args: string[]): Promise<void> {

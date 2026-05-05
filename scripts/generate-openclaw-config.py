@@ -169,9 +169,7 @@ def build_config(env: dict | None = None) -> dict:
         if ch in ("telegram", "discord"):
             account["proxy"] = proxy_url
         if ch == "telegram":
-            account["groupPolicy"] = (
-                "mentions" if _telegram_config.get("requireMention") else "open"
-            )
+            account["groupPolicy"] = "open"
         if ch in _allowed_ids and _allowed_ids[ch]:
             account["dmPolicy"] = "allowlist"
             account["allowFrom"] = _allowed_ids[ch]
@@ -181,6 +179,9 @@ def build_config(env: dict | None = None) -> dict:
         _ch_cfg["discord"].update(
             {"groupPolicy": "allowlist", "guilds": _discord_guilds}
         )
+
+    if "telegram" in _ch_cfg and _telegram_config.get("requireMention"):
+        _ch_cfg["telegram"]["groups"] = {"*": {"requireMention": True}}
 
     # Normalize schemeless URLs before parsing — urlparse("remote-host:18789")
     # misclassifies hostname as scheme. Mirrors ensureScheme() in dashboard-contract.ts.
@@ -194,7 +195,23 @@ def build_config(env: dict | None = None) -> dict:
         if parsed.scheme and parsed.netloc
         else "http://127.0.0.1:18789"
     )
-    origins = list(dict.fromkeys(["http://127.0.0.1:18789", chat_origin]))
+    # When onboard injects an internal port (e.g. :18789) into a URL that the
+    # user provided without an explicit port, the browser origin from a reverse
+    # proxy (Brev Cloudflare Tunnel, nginx, Caddy, etc.) will not carry that
+    # port.  Include the portless origin so both direct and proxied access work.
+    # Skip for loopback — no reverse proxy in front of localhost.
+    try:
+        _has_explicit_port = parsed.port is not None
+    except ValueError:
+        _has_explicit_port = False
+    if parsed.scheme and parsed.hostname and _has_explicit_port and not is_loopback(parsed.hostname):
+        host_part = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        portless_origin = f"{parsed.scheme}://{host_part}"
+    else:
+        portless_origin = None
+    origins = list(dict.fromkeys(
+        filter(None, ["http://127.0.0.1:18789", chat_origin, portless_origin])
+    ))
 
     # Auto-disable device auth when CHAT_UI_URL is non-loopback — terminal-based
     # pairing is impossible when the user only has web access (Brev Launchable,
