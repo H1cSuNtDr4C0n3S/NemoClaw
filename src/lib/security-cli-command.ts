@@ -157,6 +157,13 @@ export default class SecurityCliCommand extends Command {
   static description =
     "Inventory dependencies, generate SBOMs, correlate vulnerabilities, score risk, emit VEX, plan patches/mitigations, and validate approval gates.";
   static usage = ["security <command> [--policy <path>] [--output <path>] [--json] [--online]"];
+  static examples = [
+    "<%= config.bin %> security policy-check",
+    "<%= config.bin %> security inventory --output inventory.json",
+    "<%= config.bin %> security sbom --output sbom.cdx.json",
+    "<%= config.bin %> security scan --output vulnerability-report.json",
+    "<%= config.bin %> security apply-approved --candidate candidate-plan.json",
+  ];
 
   public async run(): Promise<void> {
     let args: ParsedSecurityArgs;
